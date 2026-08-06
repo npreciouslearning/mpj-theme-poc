@@ -1,0 +1,54 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>MPJ Theme POC — Tailwind CDN + CSS Variables</title>
+<script src="https://cdn.tailwindcss.com"></script>
+<script>
+tailwind.config = {
+  theme: {
+    extend: {
+      colors: {
+        app: {
+          rose: 'rgb(var(--primary) / <alpha-value>)',
+          cream: 'rgb(var(--bg-primary) / <alpha-value>)',
+          dark: 'rgb(var(--text-primary) / <alpha-value>)'
+        }
+      }
+    }
+  }
+};
+</script>
+<style>
+:root {
+  --primary: 210 167 165;
+  --bg-primary: 253 251 247;
+  --text-primary: 45 45 45;
+}
+.theme-ocean {
+  --primary: 79 163 217;
+  --bg-primary: 247 252 255;
+  --text-primary: 36 67 90;
+}
+body { font-family: system-ui, sans-serif; }
+</style>
+</head>
+<body class="bg-app-cream text-app-dark p-6 max-w-xl mx-auto">
+<h1 class="text-2xl font-bold mb-2">MPJ Theme POC</h1>
+<p class="mb-6 text-sm opacity-70">If everything works, the boxes below should match their labels. Then press the button to switch theme at runtime — all boxes should recolour instantly.</p>
+<div class="space-y-3">
+<div class="bg-app-rose text-white rounded-lg p-4">1. <b>bg-app-rose</b> → should be a solid <b>dusty rose</b> background.</div>
+<div class="bg-white border rounded-lg p-4">2. <span class="text-app-rose font-bold">text-app-rose</span> → this text should be <b>dusty rose</b>.</div>
+<div class="bg-white border-2 border-app-rose rounded-lg p-4">3. <b>border-app-rose</b> → this box should have a <b>dusty rose border</b>.</div>
+<div class="bg-app-rose/20 rounded-lg p-4">4. <b>bg-app-rose/20</b> → should be a <b>very light, transparent rose</b> (NOT solid, NOT black).</div>
+<div class="bg-app-rose/40 rounded-lg p-4">5. <b>bg-app-rose/40</b> → a <b>medium-light transparent rose</b> (darker than #4, lighter than #1).</div>
+<button type="button" class="bg-app-rose/70 hover:bg-app-rose text-white rounded-lg p-4 w-full transition-colors">6. <b>hover state</b> → hover me (or tap): background should darken from 70% to full rose.</button>
+<button type="button" class="bg-white border-2 border-app-rose/40 focus:border-app-rose focus:ring-2 focus:ring-app-rose/50 rounded-lg p-4 w-full transition outline-none">7. <b>focus state</b> → tap/click me: border + ring should become full rose.</button>
+</div>
+<button type="button" id="switchBtn" class="mt-6 bg-app-dark text-white rounded-full px-6 py-3 w-full font-semibold" onclick="document.body.classList.toggle('theme-ocean'); document.getElementById('state').innerText = document.body.classList.contains('theme-ocean') ? 'OCEAN' : 'BLUSH (default)';">8. Switch theme at runtime (currently: <span id="state">BLUSH (default)</span>)</button>
+<p class="mt-3 text-sm opacity-70">After pressing: every rose box above should turn <b>ocean blue</b>, background turns misty, text turns deep blue — with <b>no black/missing colours</b>. Press again to switch back.</p>
+<hr class="my-6">
+<p class="text-xs opacity-60">Expected result for a PASS: all 8 checks correct, opacity boxes (#4, #5) are semi-transparent (not black), and the runtime switch recolours everything cleanly. If any box is black, missing, or opacity looks wrong → report which number failed.</p>
+</body>
+</html>
