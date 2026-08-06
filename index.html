@@ -1,7 +1,7 @@
 <!--
 ======================================================
 My Personal Journey - Core Shell
-Version : 1.12.0 (Phase 4B-1 - Theme Infrastructure)
+Version : 1.13.0 (Phase 4B-2 - Light Themes)
 App Type: Personal Life Journal & Dashboard
 Developer : Generative AI
 Single HTML Application
@@ -956,12 +956,8 @@ Single HTML Application
                         </div>
 
                         <div>
-                            <label class="block text-[11px] font-bold text-gray-500 uppercase tracking-wider mb-2" data-i18n="set_lbl_theme">Theme Color</label>
-                            <select id="userTheme" class="w-full bg-white border border-app-beige rounded-xl px-4 py-3 text-sm focus:outline-none focus:border-app-rose focus:ring-1 focus:ring-app-rose transition cursor-pointer">
-                                <option value="blush">Blush Pink (Default)</option>
-                                <option value="sage">Sage Green</option>
-                                <option value="lavender">Lavender</option>
-                            </select>
+                            <label class="block text-[11px] font-bold text-gray-500 uppercase tracking-wider mb-3" data-i18n="set_lbl_theme">Appearance</label>
+                            <div id="theme-cards" class="grid grid-cols-1 sm:grid-cols-2 gap-3"></div>
                         </div>
 
                         <div>
@@ -1379,7 +1375,7 @@ Single HTML Application
         const defaultData = {
             settings: {
                 language: 'en',
-                theme: 'blush',
+                theme: 'aurora_blush',
                 pregnancyEnabled: false,
                 currency: 'RM'
             },
@@ -1781,6 +1777,7 @@ Single HTML Application
             document.getElementById('loadingOverlay').style.display = 'flex';
             setTimeout(() => {
                 loadData();
+                if (window.AppEngine && window.AppEngine.theme) window.AppEngine.theme.applyToRoot();
                 applyLanguage(appData.settings.language);
                 updateUIBasedOnData();
                 switchTab('dashboard', false);
@@ -2021,7 +2018,7 @@ Single HTML Application
 
         function updateUIBasedOnData() {
             document.getElementById('userName').value = appData.profile.name || '';
-            document.getElementById('userTheme').value = appData.settings.theme || 'blush';
+            if (typeof renderThemeCards === 'function') renderThemeCards();
             const curSel = document.getElementById('userCurrency');
             if (curSel) curSel.value = appData.settings.currency || 'RM';
             document.getElementById('togglePregnancy').checked = appData.settings.pregnancyEnabled;
@@ -2109,13 +2106,11 @@ Single HTML Application
 
         function saveSettings() {
             appData.profile.name = document.getElementById('userName').value.trim();
-            appData.settings.theme = document.getElementById('userTheme').value;
+            // Theme is handled live by the theme cards (setTheme auto-saves).
             const curSel = document.getElementById('userCurrency');
             if (curSel) appData.settings.currency = curSel.value;
             saveDataToLocal();
-            // Publish the chosen theme's palette to CSS variables so it
-            // persists after refresh. Additive only — does not restyle
-            // the finalized UI. Guarded in case the engine isn't ready.
+            // Re-assert current theme (harmless; keeps CSS vars in sync).
             if (window.AppEngine && window.AppEngine.theme) {
                 window.AppEngine.theme.applyToRoot();
             }
@@ -2232,6 +2227,7 @@ Single HTML Application
                             }
                         };
                         saveDataToLocal();
+                        if (window.AppEngine && window.AppEngine.theme) window.AppEngine.theme.applyToRoot();
                         // Re-apply language from the imported data (falls back to
                         // current language if the imported value is not valid).
                         const importedLang = translations[appData.settings.language]
@@ -2253,6 +2249,7 @@ Single HTML Application
         function processReset() {
             appData = JSON.parse(JSON.stringify(defaultData));
             saveDataToLocal();
+            if (window.AppEngine && window.AppEngine.theme) window.AppEngine.theme.applyToRoot();
             applyLanguage(appData.settings.language);
             updateUIBasedOnData();
             updateDashboardDateAndHero();
@@ -2953,62 +2950,155 @@ Single HTML Application
             // any current color unless a module explicitly asks it to,
             // so the finalized UI stays byte-identical by default.
             const ThemeEngine = {
-                /* Phase 4B-1: palettes hold FULL semantic token sets as
-                   RGB channel strings ("r g b") so opacity modifiers work.
-                   4B-1 ships ONLY the blush baseline (no new themes yet);
-                   legacy names sage/lavender alias to blush for backward
-                   compatibility so old saved settings.theme still open with
-                   the correct default look. 4B-2 will add real palettes. */
-                tokenDefaults: {
-                    '--bg-primary':   '253 251 247',
-                    '--card-bg':      '255 255 255',
-                    '--text-primary': '45 45 45',
-                    '--text-secondary':'74 74 74',
-                    '--primary':      '210 167 165',
-                    '--primary-soft': '244 227 228',
-                    '--primary-dark': '182 141 139',
-                    '--accent':       '212 175 55',
-                    '--border':       '235 227 213',
+                /* Phase 4B-2: five real light themes. Each palette holds a
+                   FULL semantic token set as RGB channel strings ("r g b")
+                   so Tailwind opacity modifiers work. Fonts are token-driven
+                   (--font-heading/--font-body) and lazy-loaded per theme.
+                   Category / module-identity colours (Period, Money, Mood)
+                   are NOT themed — they stay fixed. Midnight Velvet (dark)
+                   is Phase 4B-3, not here. */
+
+                // Token key order is shared by every palette.
+                _tokenKeys: [
+                    '--bg-primary', '--card-bg', '--text-primary', '--text-secondary',
+                    '--primary', '--primary-soft', '--primary-dark', '--accent', '--border',
+                    '--shadow-tint'
+                ],
+
+                // Neutral tones (sage/lavender/green/blue) stay constant across
+                // themes — they back general UI accents, not the theme identity.
+                _constantTones: {
                     '--tone-sage':    '193 205 180',
                     '--tone-lavender':'217 215 232',
                     '--tone-green':   '181 201 179',
-                    '--tone-blue':    '197 214 224',
-                    '--shadow-tint':  '210 167 165'
+                    '--tone-blue':    '197 214 224'
                 },
 
-                // Only 'blush' (aurora) is a real palette in 4B-1. Others
-                // map to it for now (backward-compatible).
                 palettes: {
-                    blush: {}   // {} = use tokenDefaults as-is (baseline)
+                    aurora_blush: {
+                        label: 'Aurora Blush', icon: 'fa-spa', mood: 'Elegant • Soft • Feminine',
+                        tokens: {
+                            '--bg-primary': '253 251 247', '--card-bg': '255 255 255',
+                            '--text-primary': '45 45 45', '--text-secondary': '74 74 74',
+                            '--primary': '210 167 165', '--primary-soft': '244 227 228',
+                            '--primary-dark': '182 141 139', '--accent': '212 175 55',
+                            '--border': '235 227 213', '--shadow-tint': '210 167 165'
+                        },
+                        fonts: { heading: "'Playfair Display', serif", body: "'Poppins', sans-serif" },
+                        swatches: ['#FDFBF7', '#D2A7A5', '#B68D8B', '#D4AF37'],
+                        googleFonts: 'Playfair+Display:wght@400;600;700&family=Poppins:wght@400;500;600;700'
+                    },
+                    sage_harmony: {
+                        label: 'Sage Harmony', icon: 'fa-leaf', mood: 'Calm • Natural • Minimal',
+                        tokens: {
+                            '--bg-primary': '246 248 243', '--card-bg': '255 255 255',
+                            '--text-primary': '43 51 40', '--text-secondary': '74 82 69',
+                            '--primary': '139 163 120', '--primary-soft': '220 230 211',
+                            '--primary-dark': '107 130 89', '--accent': '168 137 74',
+                            '--border': '221 229 212', '--shadow-tint': '139 163 120'
+                        },
+                        fonts: { heading: "'Merriweather', serif", body: "'Nunito', sans-serif" },
+                        swatches: ['#F6F8F3', '#8BA378', '#6B8259', '#A8894A'],
+                        googleFonts: 'Merriweather:wght@400;700&family=Nunito:wght@400;500;600;700'
+                    },
+                    amethyst_mist: {
+                        label: 'Amethyst Mist', icon: 'fa-gem', mood: 'Luxury • Calm • Creative',
+                        tokens: {
+                            '--bg-primary': '250 248 252', '--card-bg': '255 255 255',
+                            '--text-primary': '46 40 56', '--text-secondary': '76 68 89',
+                            '--primary': '165 148 206', '--primary-soft': '229 222 242',
+                            '--primary-dark': '133 116 180', '--accent': '201 162 39',
+                            '--border': '228 222 236', '--shadow-tint': '165 148 206'
+                        },
+                        fonts: { heading: "'Playfair Display', serif", body: "'Quicksand', sans-serif" },
+                        swatches: ['#FAF8FC', '#A594CE', '#8574B4', '#C9A227'],
+                        googleFonts: 'Playfair+Display:wght@400;600;700&family=Quicksand:wght@400;500;600;700'
+                    },
+                    ocean_breeze: {
+                        label: 'Ocean Breeze', icon: 'fa-water', mood: 'Fresh • Clean • Professional',
+                        tokens: {
+                            '--bg-primary': '245 250 253', '--card-bg': '255 255 255',
+                            '--text-primary': '28 58 75', '--text-secondary': '58 85 102',
+                            '--primary': '62 147 205', '--primary-soft': '211 234 247',
+                            '--primary-dark': '46 114 155', '--accent': '224 164 88',
+                            '--border': '214 230 239', '--shadow-tint': '62 147 205'
+                        },
+                        fonts: { heading: "'Manrope', sans-serif", body: "'Inter', sans-serif" },
+                        swatches: ['#F5FAFD', '#3E93CD', '#2E729B', '#E0A458'],
+                        googleFonts: 'Manrope:wght@400;600;700&family=Inter:wght@400;500;600;700'
+                    },
+                    mocha_linen: {
+                        label: 'Mocha Linen', icon: 'fa-mug-hot', mood: 'Warm • Cozy • Timeless',
+                        tokens: {
+                            '--bg-primary': '250 246 240', '--card-bg': '255 255 255',
+                            '--text-primary': '51 40 34', '--text-secondary': '84 70 60',
+                            '--primary': '166 124 82', '--primary-soft': '234 223 209',
+                            '--primary-dark': '131 95 60', '--accent': '201 154 62',
+                            '--border': '230 218 203', '--shadow-tint': '166 124 82'
+                        },
+                        fonts: { heading: "'Lora', serif", body: "'Source Sans 3', sans-serif" },
+                        swatches: ['#FAF6F0', '#A67C52', '#835F3C', '#C99A3E'],
+                        googleFonts: 'Lora:wght@400;600;700&family=Source+Sans+3:wght@400;500;600;700'
+                    }
                 },
 
-                _aliases: { aurora_blush: 'blush', sage: 'blush', lavender: 'blush' },
+                // Legacy names -> real theme keys (backward-compatible).
+                _aliases: {
+                    blush: 'aurora_blush',
+                    sage: 'sage_harmony',
+                    lavender: 'amethyst_mist'
+                },
 
+                // Resolve the stored theme name to a real palette key.
                 current: function () {
-                    let name = (appData.settings && appData.settings.theme) || 'blush';
+                    let name = (appData.settings && appData.settings.theme) || 'aurora_blush';
                     if (this._aliases[name]) name = this._aliases[name];
-                    return this.palettes[name] ? name : 'blush';
+                    return this.palettes[name] ? name : 'aurora_blush';
                 },
 
-                // Publish semantic tokens on :root. In 4B-1 this reasserts
-                // the baseline values (already in the stylesheet), keeping
-                // the door open for 4B-2 to swap palettes at runtime.
+                // Lazy-load a theme's Google Fonts once (unique <link> id).
+                _loadFont: function (key) {
+                    const pal = this.palettes[key];
+                    if (!pal || !pal.googleFonts) return;
+                    const id = 'theme-font-' + key;
+                    if (document.getElementById(id)) return; // already loaded
+                    try {
+                        const link = document.createElement('link');
+                        link.id = id;
+                        link.rel = 'stylesheet';
+                        link.href = 'https://fonts.googleapis.com/css2?family=' + pal.googleFonts + '&display=swap';
+                        document.head.appendChild(link);
+                    } catch (e) { /* keep existing fonts as fallback */ }
+                },
+
+                // Publish all semantic tokens + fonts on :root for the active
+                // theme. Live — no reload.
                 applyToRoot: function () {
                     const name = this.current();
-                    const overrides = this.palettes[name] || {};
+                    const pal = this.palettes[name];
+                    if (!pal) return;
                     const root = document.documentElement;
-                    const self = this;
-                    Object.keys(this.tokenDefaults).forEach(function (k) {
-                        root.style.setProperty(k, overrides[k] || self.tokenDefaults[k]);
+                    // Colour tokens
+                    this._tokenKeys.forEach(function (k) {
+                        if (pal.tokens[k]) root.style.setProperty(k, pal.tokens[k]);
                     });
+                    // Constant neutral tones (same across themes)
+                    const tones = this._constantTones;
+                    Object.keys(tones).forEach(function (k) { root.style.setProperty(k, tones[k]); });
+                    // Fonts (token-driven; lazy-load the files)
+                    this._loadFont(name);
+                    root.style.setProperty('--font-heading', pal.fonts.heading);
+                    root.style.setProperty('--font-body', pal.fonts.body);
+                    // Keep --font-ui/--font-signature as-is (global UI + signature).
                 },
 
                 setTheme: function (name) {
                     const resolved = this._aliases[name] || name;
                     if (!this.palettes[resolved]) return false;
-                    appData.settings.theme = name;   // preserve chosen name
+                    appData.settings.theme = resolved;   // store canonical key
                     saveDataToLocal();
                     this.applyToRoot();
+                    if (typeof renderThemeCards === 'function') renderThemeCards();
                     return true;
                 }
             };
@@ -4833,6 +4923,49 @@ Single HTML Application
             if (st.cycleDay != null) bits.push(journalT('period_cycle_day') + ' ' + st.cycleDay);
             if (st.nextPredictedDate) bits.push(journalT('period_next_cycle') + ' ~ ' + formatJournalDate(st.nextPredictedDate));
             el.innerText = bits.length ? bits.join(' · ') : journalT('period_tracking_started');
+        }
+
+        /* =========================================================
+           ==========  PHASE 4B-2 — THEME CARDS (Settings)  ======
+           =========================================================
+           Renders 5 theme cards with palette preview. Tapping a card
+           live-switches the theme (AppEngine.theme.setTheme auto-saves),
+           updates the active check, no Save button. Read-only view over
+           ThemeEngine.palettes — no storage/CRUD of its own.
+           ========================================================= */
+        function selectTheme(key) {
+            AppEngine.theme.setTheme(key);   // applies + saves + re-renders cards
+        }
+
+        function renderThemeCards() {
+            const box = document.getElementById('theme-cards');
+            if (!box || !window.AppEngine) return;
+            const palettes = AppEngine.theme.palettes;
+            const active = AppEngine.theme.current();
+            box.innerHTML = Object.keys(palettes).map(function (key) {
+                const p = palettes[key];
+                const isActive = key === active;
+                const swatches = p.swatches.map(function (c) {
+                    return '<span class="inline-block w-5 h-5 rounded-full border border-black/5" style="background:' + c + '"></span>';
+                }).join('');
+                const check = isActive
+                    ? '<span class="absolute top-3 right-3 w-6 h-6 rounded-full bg-app-rose text-white flex items-center justify-center text-xs"><i class="fa-solid fa-check"></i></span>'
+                    : '';
+                const ring = isActive ? 'border-app-rose ring-2 ring-app-rose/40' : 'border-app-beige hover:border-app-rose/50';
+                return '' +
+                '<div role="button" tabindex="0" ' +
+                    'onclick="selectTheme(\'' + key + '\')" ' +
+                    'onkeydown="if(event.key===\'Enter\'||event.key===\' \'){event.preventDefault();selectTheme(\'' + key + '\');}" ' +
+                    'class="relative bg-white border-2 ' + ring + ' rounded-2xl p-4 cursor-pointer transition-all">' +
+                    check +
+                    '<div class="flex items-center gap-2 mb-1">' +
+                        '<i class="fa-solid ' + p.icon + ' text-app-rose"></i>' +
+                        '<h4 class="font-ui text-sm font-bold text-app-dark">' + escapeHtml(p.label) + '</h4>' +
+                    '</div>' +
+                    '<p class="font-ui text-[11px] text-gray-400 mb-3">' + escapeHtml(p.mood) + '</p>' +
+                    '<div class="flex items-center gap-1.5">' + swatches + '</div>' +
+                '</div>';
+            }).join('');
         }
 
         window.onload = initApp;
